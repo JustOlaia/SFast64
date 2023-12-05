@@ -1,5 +1,18 @@
 # Ocarina Of Time
 
+## Table of Contents
+1. [Getting Started](#getting-started)
+2. [Scene Overview](#scene-overview)
+3. [Actors](#actors)
+4. [Exits](#exits)
+5. [Draw Config and Dynamic Material Properties](#scene-draw-configuration-and-dynamic-material-properties)
+6. [Collision](#collision)
+7. [Skeletons and Animations](#skeletons-and-animations)
+8. [Flipbook Textures](#flipbook-textures)
+9. [Custom Link Process](#custom-link-process)
+10. [Custom Skeleton Mesh Process](#custom-skeleton-mesh-process)
+11. [Cutscenes](#cutscenes)
+
 ### Getting Started
 1. In the 3D view properties sidebar, go to the ``Fast64`` tab, then ``Fast64 Global Settings`` and set ``Game`` to ``OOT``.
 2. Set ``F3D Microcode`` to ``F3DEX2/LX2``.
@@ -71,35 +84,71 @@ To import a skeletal mesh, just click "Import" for the armature importer. You ma
 ![](/images/oot_imported_gerudo_textured.png)
 ![](/images/oot_imported_gerudo_solid.png)
 
+1. Certain colors are white/different: Some graphical effects are achieved through dynamic Gfx commands, such as tinting white textures. These effects will not be imported.
+2. Strange imported normals: Due to the behaviour of rotating vertices on a skinned triangle that differs between Blender and the N64, normals may look strange. Note that these normals will look correct if re exported back into the game (assuming the rest pose is not changed).
 
-1. Eye/face textures are black: Texture pointers which are set dynamically will not be imported. Instead, the name of the pointer will be used instead of the actual data.
-2. Certain colors are white/different: Some graphical effects are achieved through dynamic Gfx commands, such as tinting white textures. These effects will not be imported.
-3. Strange imported normals: Due to the behaviour of rotating vertices on a skinned triangle that differs between Blender and the N64, normals may look strange. Note that these normals will look correct if re exported back into the game (assuming the rest pose is not changed).
-
-Note that rest pose rotations are zeroed out on export, so you can modify the rest pose of imported armature while still preserving its structure. You can do this by using the "Apply As Rest Pose" operator under the Fast64 tab. Note that imported animations however still require the imported rest pose to work correctly.
+Note that rest pose rotations are zeroed out on export, so you can modify the rest pose of imported armature while still preserving its structure. You can do this by using the "Apply As Rest Pose" operator under the Fast64 tab or the OOT Skeleton Exporter section. Note that imported animations however still require the imported rest pose to work correctly.
 
 There may also be an issue where some meshes import completely black due to the assumption that the F3D cycle mode is set to 2-Cycle, when it should really be 1-Cycle. Try changing the cycle type to 1-Cycle in cases where a dynamic texture pointer is not expected.
 
 To import an animation, select the armature the animation belongs to then click "Import" on the animation importer.
 To export an animation, select an armature and click "Export", which will export the active animation of the armature.
 
-### Creating a Cutscene
+### Flipbook Textures
+Many actors in OOT will animate textures through code using a flipbook method, like with Link's eyes/mouth. A flipbook material will use a texture reference pointing to an address formatted as 0x0?000000. You can find the flipbook texture frames in the material properties tab underneath the dynamic material section. 
+![](/images/oot_flipbook.png)
+On import, Fast64 will try to read the provided actors code for flipbook textures. On export, Fast64 will try to modify texture arrays used for flipbook textures.
+
+For Link, the eyes/mouth materials use flipbook textures. For Link animations you can animate these flipbook indices in the Link Animation Inspector, located in the object properties tab for an armature object. Note that the 0 index is reserved for the "auto" setting, and that flipbook texture indices start at 1.
+![](/images/oot_link_texture_anim.png)
+
+### Custom Link Process
+1. In the OOT Skeleton Exporter window, go to the Import Skeleton section, select "Mode" and switch it to "Adult Link."
+2. Click "Import Skeleton" to import the skeleton from your decomp repo set up in the the "Getting Started" intro.
+3. Replace/modify the mesh. When applying weights, make sure there is geometry weighted to every bone that is set to "deformable". Otherwise Link's skeleton may break in game, due to the way Link's actor handles some of its drawing code.
+4. For any new materials, make sure to go to material properties -> OOT Dynamic Material Properties -> enable segment C. This handles rendering for Link's reflection.
+5. To add your own eye/mouth materials, create a new F3D material, then go to material properties -> F3D Material Inspector -> Sources -> Texture 0 Properties:
+    - Set "Use Texture Reference".
+    - Set the texture size to the size of your textures.
+    - Ignore palette reference/size, those will be auto-generated if using CI textures.
+    - Set the texture reference to 0x08000000 (eyes) or 0x09000000 (mouth)
+6. To add different eye/mouth texture frames, go to the material properties tab, then scroll down to the Flipbook Properties.
+7. Once you've modified Link's mesh, go the OOT Skeleton Exporter window, go to the Export Skeleton section, select "Mode" and switch it to "Adult Link".
+8. Select Link's armature and then hit "Export Skeleton".
+9. If you're not using HackerOOT, make sure to set NON_MATCHING to 1 in the Makefile in the decomp repo.
+10. Most of Link's items are combined with his hand mesh. There are plans to simplify the process, but for now these models must be manually replaced using the display list importer/exporter. You'll also have to modify the DL arrays at the start of src/code/z_player_lib.c to include your own DLs if you're appending and not replacing.
+11. Common Issues:
+    - Corrupted mesh: Make sure the root, upper control, and lower control bones are the only bones set to non-deform.
+    - Incorrect waist DL: Go to src/code/z_player_lib.c and modify sPlayerWaistDLs to include your own waist DL.
+    
+Note on Link's bone-weighting requirements in depth:
+Heavy modifications of Links model can cause his matrices array to shift from what many display lists in the game expect. Changing the amount of display lists Link's skeleton has can cause some references to matrices in segment 0xD to break, and those display lists must be updated to reflect your changes.
+
+### Custom Skeleton Mesh Process
+1. Import the character you want to modify.
+    - Skeleton: The name of the skeleton struct, of type FlexSkeletonHeader or SkeletonHeader. Usually found in the object files.
+    - Object: The "asset group" the skeleton belongs to. The name will be from "assets/objects/\<name\>/"
+    - Overlay: The location of the actor code, if necessary. The name will be from "src/overlays/actors/\<name\>/"
+2. Put it into a suitable rest pose, then click the "Apply As Rest Pose" button at the bottom of the OOT Skeleton Exporter section to apply it. It helps to import an existing animation to see how a good rest pose would look like.
+    - Animation Header Name: struct of type AnimationHeader or LinkAnimationHeader, found in the object files.
+3. Replace the existing mesh with your own.
+4. Export the skeleton back into the game. It is not necessary to re-fold the armature before export.
+5. If "Replace Vanilla Headers On Export" is enabled, then any reference conflicts should be removed.
+6. In the actor header file, (in src/overlays/actors/\<name\>/), set the joint/morph table sizes to be (number of bones + 1)
+7. In the actor source file, this value should also be used for the limbCount argument in SkelAnime_InitFlex().
+
+### Cutscenes
+For more informations about cutscenes [click here](cutscene_docs.md)
+
 **Creating the cutscene itself:**
 
-To create custom cutscenes you need to get [zcamedit, made by Sauraen](https://github.com/sauraen/zcamedit).
-
-1. Start with using the ``Add Cutscene`` button from the OOT Panel. Name it ``Cutscene.YOUR_CS_NAME``, ``YOUR_CS_NAME`` being the name of your choice, it can be something like: ``Cutscene.fireTempleIntroCS``. Note that this object can't be parented to any object.
-2. Select the cutscene empty object, then in the ``Object Properties`` panel click on ``Init Cutscene Empty``, then ``Create camera shot``. This will initialise the cutscene and add a basic camera shot with 4 bones.
-3. Select the scene where you want to add the cutscene, and in the object properties go in the ``Cutscene`` tab then enable ``Write Cutscene``. In ``Data`` select ``Object`` and in ``Cutscene Object`` select the cutscene empty object you just created.
-4. Now you need to create the camera shot. The ``Create camera shot`` button from the cutscene object's properties panel will add a basic shot that you can edit. To have a better idea of the position/angle of one point of the shot, you can change the display of the armature in the ``Object Data Properties`` panel (select the shot object first), choose ``Octahedral`` in ``Viewport Display`` then ``Display As``.
-5. As mentioned in the zcamedit repository, the first and last bone of the shot won't be actual camera points, it defines the start and the end of a cutscene, this means with the basic shot you'll have only 2 actual camera points. Either duplicate (``SHIFT+D``) or add a new bone to add more camera points.
-6. You can edit the position and rotation of each bone in the ``Edit Mode`` after selecting the shot object. The "tail" (less large point) of a bone is the direction, and "head" (larger point) is the origin.
-7. When you're done with your cutscene, start with exporting your scene (you don't need to export it everytime). When this is done, select the cutscene object you want to export and use ``Export Cutscene`` from ``OOT Cutscene Exporter`` in the OOT panel. In the ``File`` field, you can choose the scene of your choice (note that it can export into actors too).
+1. Start with using the ``Add Cutscene`` button from the OOT Panel. Name it ``Cutscene.YOUR_CS_NAME``, ``YOUR_CS_NAME`` being the name of your choice, it can be something like: ``Cutscene.fireTempleIntroCS``. Note that this object can't be parented to any object, also this will automatically create a new camera and it will also set the Blender scene's active camera to this one.
+2. Select the scene where you want to add the cutscene, and in the object properties go in the ``Cutscene`` tab then enable ``Write Cutscene``. In ``Data`` select ``Object`` and in ``Cutscene Object`` select the cutscene empty object you just created.
+3. Now you can create the camera shot. The ``Create Camera Shot`` button from the cutscene object's properties panel will add a basic shot with 4 bones that you can edit. To have a better idea of the position/angle of one point of the shot, you can change the display of the armature in the ``Object Data Properties`` panel (select the shot object first), choose ``Octahedral`` in ``Viewport Display`` then ``Display As``.
+4. The first and last bone of the shot won't be actual camera points, it defines the start and the end of a camera shot, this means a basic shot will only have 2 actual camera points. Either duplicate (``SHIFT+D``) or add a new bone to add more camera points. Note that these points will be exported in the order you can see in the view layer.
+5. You can edit the position and rotation of each bone in the ``Edit Mode`` after selecting the shot object. The "tail" (less large point) of a bone is the direction (the "look-at", or AT), and "head" (larger point) is the origin (the "eye").
+7. When you're done with your cutscene, exporting the scene will also export the camera shot and actor cue data. If you don't want to re-export the scene everytime, select the cutscene object you want to export and use ``Export Cutscene`` from ``OOT Cutscene Exporter`` in the OOT panel. In the ``File`` field, you can choose the scene of your choice (note that it can export into actors too). You can toggle the usage of decomp's names and macros with the ``Use Decomp for Export`` checkbox, you can also choose to insert the motion data in an existing cutscene (it will create a new array if it can't find it, it's based on the name of the object you selected). This is done by toggling the ``Export Motion Data Only`` checkbox.
 8. Compile the game.
-
-To get more informations about the game's cutscene system/camera system, read [zcamedit's readme](https://github.com/sauraen/zcamedit#setting-up-a-cutscene)
-
-Note: a "cutscene terminator" is a cutscene command that makes a scene transition. For example, this is used in the intro cutscene or in the credits.
 
 <details closed>
 <summary>Armature Data Properties Panel</summary>
@@ -130,3 +179,10 @@ Note that you can have the actual address of your cutscene if you use ``sym_info
 - Result: ``Symbol gHyruleFieldIntroCs (RAM: 0x02013AA0, ROM: 0x27E9AA0, build/assets/scenes/overworld/spot00/spot00_scene.o)``
 
 If you have a softlock in-game then you probably did something wrong when creating the cutscene. Make sure you set up the bones properly. The softlock means the game is playing a cutscene but it's probably reading wrong data. Make sure the cutscene is exported, if it's not export it again.
+
+If the camera preview in Blender isn't following where you have the bones or if the cutscene sort of works in-game but the positions are all wrong:
+
+1. Make sure your scene empty object, room empty object, and cutscene empty object are all at the Blender origin. You can usually do this with a combination of Object > Clear > Origin and Alt+G. Maybe Object > Apply > All Transforms if that doesn't work. If your room empty object is 1 meter below your scene empty object, as fast64 does by default, that offset will be applied to everything in game and then the zcamedit stuff will not be at the correct relative position.
+
+2. If you moved / rotated / etc. one of the camera shots / armatures in object mode, this transformation will be ignored. You can fix this by selecting the shot / armature in object mode and clicking Object > Apply > All Transforms. That will convert the transform to actual changed positions for each bone.
+

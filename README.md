@@ -1,6 +1,6 @@
 # SFast64
 
-- This is a custom fork of [Fast64](https://github.com/Fast-64/fast64) 1.0.1 designed for [SATURN](https://github.com/Llennpie/Saturn) model development.
+- This is a custom fork of [Fast64](https://github.com/Fast-64/fast64) designed for [SATURN](https://github.com/Llennpie/Saturn) model development.
 - Includes Saturn-exclusive geo commands ***and*** [METALComposer+](https://github.com/projectcomet64/metal-composer) *JSON* animation export.
 
 ![alt-text](/images/mario_running.gif)
