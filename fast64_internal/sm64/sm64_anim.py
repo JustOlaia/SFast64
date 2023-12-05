@@ -34,8 +34,8 @@ class SM64_Animation:
 			self.header.to_c() + '\n'
 		return data
 	
-	def to_json(self, friendlyName, friendlyAuthor):
-		return '{\n\t' + self.header.to_json(friendlyName, friendlyAuthor) + ',\n\t' +\
+	def to_json(self, friendlyName, friendlyAuthor, extra_bone):
+		return '{\n\t' + self.header.to_json(friendlyName, friendlyAuthor, extra_bone) + ',\n\t' +\
 			self.values.to_json(assigned_name="values") + ',\n\t' +\
 			self.indices.to_json(assigned_name="indices") + '}'
 
@@ -147,10 +147,11 @@ class SM64_AnimationHeader:
 			'};\n'
 		return data
 	
-	def to_json(self, friendlyName = "", friendlyAuthor = ""):
+	def to_json(self, friendlyName = "", friendlyAuthor = "", extra_bone = False):
 		data = '"name": "' + friendlyName + '",\n' +\
 			'\t"author": "' + friendlyAuthor + '",\n' +\
 			'\t"looping": "' + str("true" if self.repetitions < 1 else "false") + '",\n' +\
+			'\t"extra_bone": "' + str("true" if extra_bone == True else "false") + '",\n' +\
 			'\t"length": ' + str(int(round(self.frameInterval[1] - 1))) + ',\n' +\
 			'\t"nodes": ' + str(self.nodeCount)
 		return data
@@ -290,11 +291,11 @@ def exportAnimationInsertableBinary(filepath, armatureObj, isDMA, loopAnim):
 	writeInsertableFile(filepath, insertableBinaryTypes['Animation'],
 		sm64_anim.get_ptr_offsets(isDMA), startAddress, animData)
 
-def exportAnimationJSON(filepath, armatureObj, loop, name, author):
+def exportAnimationJSON(filepath, armatureObj, loop, name, author, extra_bone):
 	sm64_anim = exportAnimationCommon(armatureObj, loop, "")
 	# animName = armatureObj.animation_data.action.name
 
-	data = sm64_anim.to_json(name, author)
+	data = sm64_anim.to_json(name, author, extra_bone)
 	outFile = open(filepath, 'w', newline='\n')
 	outFile.write(data)
 	outFile.close()
@@ -679,7 +680,7 @@ class SM64_ExportAnimMario(bpy.types.Operator):
 						exportAnimationJSON(
 							bpy.path.abspath(context.scene.animJsonPath),
 							armatureObj, context.scene.loopAnimation,
-							context.scene.animJsonName, context.scene.animJsonAuthor)
+							context.scene.animJsonName, context.scene.animJsonAuthor, context.scene.animJsonExtraBone)
 						self.report({'INFO'}, 'Success! Exported JSON animation to ' +\
 							context.scene.animJsonPath)
 				else:
@@ -803,6 +804,7 @@ class SM64_ExportAnimPanel(SM64_Panel):
 				col.prop(context.scene, 'animJsonName')
 				col.prop(context.scene, 'animJsonAuthor')
 				col.prop(context.scene, 'animJsonPath')
+				col.prop(context.scene, 'animJsonExtraBone')
 			else:
 				prop_split(col, context.scene, 'animExportHeaderType', 'Export Type')
 				prop_split(col, context.scene, 'animName', 'Name')
@@ -989,6 +991,8 @@ def sm64_anim_register():
 		name = 'Name', default = 'Custom Animation')
 	bpy.types.Scene.animJsonAuthor = bpy.props.StringProperty(
 		name = 'Author', default = 'sm64rise')
+	bpy.types.Scene.animJsonExtraBone = bpy.props.BoolProperty(
+		name = 'Extra MComp+ Bone')
 	bpy.types.Scene.animExportHeaderType = bpy.props.EnumProperty(
 		items = enumExportHeaderType, name = 'Header Export', default = 'Actor')
 	bpy.types.Scene.animLevelName = bpy.props.StringProperty(name = 'Level', 
@@ -1028,6 +1032,7 @@ def sm64_anim_unregister():
 	del bpy.types.Scene.animCustomExport
 	del bpy.types.Scene.animJsonExport
 	del bpy.types.Scene.animJsonPath
+	del bpy.types.Scene.animJsonExtraBone
 	del bpy.types.Scene.animExportHeaderType
 	del bpy.types.Scene.animLevelName
 	del bpy.types.Scene.animLevelOption
